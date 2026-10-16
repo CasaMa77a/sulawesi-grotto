@@ -1,0 +1,6 @@
+node_modules/
+dist/
+release/
+release_noicon/
+*.log
+.DS_Store
