@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CHARSET, newFont, glyphFor, renderGlyphCell, renderText, makeRune, seedRng,
-         FORGE_STYLES, forgeFont, forgeGlyph, fxGlyph } from '../font.js';
+import { CHARSET, newFont, glyphFor, renderGlyphCell, renderText, makeRune, seedRng, importTTF, exportTTF, distortGlyph, DESTROY_PRESETS } from '../font.js';
 
 const Mini = ({ label, value, min, max, step = 1, onChange }) => (
   <label className="mini">
@@ -20,13 +19,11 @@ export default function FontPanel({ params, set }) {
   const [tool, setTool] = useState('pen');   // pen | node
   const [sel, setSel] = useState(null);      // {pi, i} path index + point index | 'c'
   const [testStr, setTestStr] = useState('SIGIL');
-  const [style, setStyle] = useState('gothic');
-  const [chaos, setChaos] = useState(0.3);
-  const [seed, setSeed] = useState(7);
-  const [fx, setFx] = useState({ inflate: 0, rough: 0, spikes: 0, drip: 0, branch: 0, vein: 0 });
+  const [ops, setOps] = useState({ noise: 0, melt: 0, spike: 0, push: 0, rotate: 0, skew: 0, slices: 0, sliceOff: 40, snap: 0, chop: 0 });
   const cvsRef = useRef(null);
   const dragRef = useRef(null);
   const fileRef = useRef(null);
+  const ttfRef = useRef(null);
   const VS = 520;
 
   const gl = font ? (font.glyphs[ch] || { paths: [] }) : null;
@@ -216,34 +213,57 @@ export default function FontPanel({ params, set }) {
     };
     rd.readAsText(f);
   }
+
+  // load a real .ttf/.otf → convert outlines to our editable model
+  function loadTTF(file) {
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const nf = importTTF(rd.result, file.name.replace(/\.[^.]+$/, ''));
+        set(null, 'fonts', [...fonts, nf]);
+        set(null, 'fontSel', fonts.length);
+      } catch (err) { console.error('font parse failed', err); }
+    };
+    rd.readAsArrayBuffer(file);
+  }
+
+  function downloadTTF() {
+    if (!font) return;
+    const buf = exportTTF(font);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'font/ttf' }));
+    a.download = `${font.name.replace(/\W+/g, '_')}.ttf`;
+    a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  // destructively apply current ops — to one glyph or the whole font
+  function destroy(all) {
+    const rng = seedRng(Date.now() & 0xffff);
+    update((f) => {
+      const keys = all ? Object.keys(f.glyphs) : [ch];
+      for (const k of keys) {
+        if (!f.glyphs[k]) continue;
+        f.glyphs[k] = distortGlyph(f.glyphs[k], ops, f, rng);
+      }
+      return f;
+    });
+  }
+
+  const mutate = () => {
+    const r = () => Math.random();
+    setOps({
+      noise: Math.round(r() * 60), melt: r() * 0.5, spike: r() * 0.6,
+      push: (r() - 0.5) * 0.6, rotate: (r() - 0.5) * 60, skew: (r() - 0.5) * 0.5,
+      slices: r() < 0.5 ? 0 : 2 + Math.floor(r() * 8), sliceOff: Math.round(r() * 70),
+      snap: r() < 0.6 ? 0 : 20 + Math.floor(r() * 60), chop: r() < 0.7 ? 0 : Math.floor(r() * 4),
+    });
+  };
   function runeFill() {
     const rng = seedRng(Date.now() & 0xffff);
     update((f) => {
       for (const c of CHARSET) if (!f.glyphs[c]) f.glyphs[c] = makeRune(f, rng);
       return f;
     });
-  }
-
-  // guided generator — forge whole font / one glyph / mutate
-  function forgeAll() {
-    update((f) => { forgeFont(f, style, chaos, seed); return f; });
-    setSel(null);
-  }
-  function forgeOne(mut = false) {
-    const st = FORGE_STYLES[style];
-    const s = seed + ch.charCodeAt(0) * 7919 + (mut ? Date.now() & 0xfff : 0);
-    update((f) => { f.glyphs[ch] = forgeGlyph(f, ch, st, seedRng(s), chaos); return f; });
-    setSel(null);
-  }
-  // apply organic vector fx to glyph(s) — destructive, regenerate to revert
-  function applyFx(all) {
-    const rng = seedRng(Date.now() & 0xffff);
-    update((f) => {
-      const targets = all ? Object.keys(f.glyphs) : [ch];
-      for (const c of targets) if (f.glyphs[c]) f.glyphs[c] = fxGlyph(f, f.glyphs[c], fx, rng);
-      return f;
-    });
-    setSel(null);
   }
 
   const prev = font && renderText(font, testStr, 46, { tracking: font.track, warp: params.text?.warp || 0 });
@@ -292,29 +312,6 @@ export default function FontPanel({ params, set }) {
           <button className="obtn" onClick={curveSeg} disabled={!sel}>curve seg</button>
         </div>
         {font && (<>
-          <div className="fsect">◈ forge</div>
-          <select className="oselect fsel" value={style} onChange={(e) => setStyle(e.target.value)}>
-            {Object.keys(FORGE_STYLES).map((k) => <option key={k} value={k}>{k}</option>)}
-          </select>
-          <Mini label="chaos" value={chaos} min={0} max={1} step={0.05} onChange={setChaos} />
-          <Mini label="seed" value={seed} min={1} max={9999} onChange={setSeed} />
-          <div className="frow">
-            <button className="obtn fgo" onClick={forgeAll}>⚒ forge all</button>
-            <button className="obtn" onClick={() => forgeOne(false)}>glyph</button>
-            <button className="obtn" onClick={() => forgeOne(true)}>mutate</button>
-          </div>
-          <div className="fsect">organic fx</div>
-          <Mini label="inflate" value={fx.inflate} min={-1} max={1} step={0.05} onChange={(v) => setFx({ ...fx, inflate: v })} />
-          <Mini label="rough" value={fx.rough} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, rough: v })} />
-          <Mini label="spikes" value={fx.spikes} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, spikes: v })} />
-          <Mini label="drip" value={fx.drip} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, drip: v })} />
-          <Mini label="branch" value={fx.branch} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, branch: v })} />
-          <Mini label="vein" value={fx.vein} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, vein: v })} />
-          <div className="frow">
-            <button className="obtn" onClick={() => applyFx(false)}>fx glyph</button>
-            <button className="obtn" onClick={() => applyFx(true)}>fx all</button>
-          </div>
-          <div className="fsect">metrics</div>
           <Mini label="weight" value={font.weight} min={8} max={200}
             onChange={(v) => update((f) => { f.weight = v; return f; })} />
           <Mini label="glyph w" value={font.glyphW} min={200} max={900}
@@ -332,6 +329,37 @@ export default function FontPanel({ params, set }) {
           <div className="frow">
             <button className="obtn" onClick={runeFill}>runes fill ∅</button>
             <button className="obtn" onClick={() => setGl({ paths: [] })}>clear glyph</button>
+          </div>
+
+          <div className="fsection">DESTROY</div>
+          <Mini label="noise" value={ops.noise} min={0} max={150} onChange={(v) => setOps({ ...ops, noise: v })} />
+          <Mini label="melt" value={ops.melt} min={0} max={1} step={0.05} onChange={(v) => setOps({ ...ops, melt: v })} />
+          <Mini label="spike" value={ops.spike} min={0} max={1.5} step={0.05} onChange={(v) => setOps({ ...ops, spike: v })} />
+          <Mini label="push/pull" value={ops.push} min={-0.8} max={0.8} step={0.05} onChange={(v) => setOps({ ...ops, push: v })} />
+          <Mini label="rotate" value={ops.rotate} min={-90} max={90} onChange={(v) => setOps({ ...ops, rotate: v })} />
+          <Mini label="skew" value={ops.skew} min={-1} max={1} step={0.05} onChange={(v) => setOps({ ...ops, skew: v })} />
+          <Mini label="slices" value={ops.slices} min={0} max={16} onChange={(v) => setOps({ ...ops, slices: v })} />
+          <Mini label="slice off" value={ops.sliceOff} min={0} max={120} onChange={(v) => setOps({ ...ops, sliceOff: v })} />
+          <Mini label="snap grid" value={ops.snap} min={0} max={120} onChange={(v) => setOps({ ...ops, snap: v })} />
+          <Mini label="chop" value={ops.chop} min={0} max={6} onChange={(v) => setOps({ ...ops, chop: v })} />
+          <div className="frow">
+            <button className="obtn" onClick={() => destroy(false)}>apply ▸ glyph</button>
+            <button className="obtn" onClick={() => destroy(true)}>apply ▸ ALL</button>
+            <button className="obtn" onClick={mutate}>mutate ⤨</button>
+          </div>
+          <div className="frow">
+            {Object.keys(DESTROY_PRESETS).map((k) => (
+              <button key={k} className="obtn" onClick={() => setOps({ ...ops, ...DESTROY_PRESETS[k] })}>{k}</button>
+            ))}
+          </div>
+          <button className="obtn" onClick={() => {
+            if (gl) setGl({ paths: gl.paths.map((p) => ({ ...p, pts: p.pts.map((q) => ({ ...q, c: null })) })) });
+          }}>polygonize ▸</button>
+
+          <div className="fsection">FILE</div>
+          <div className="frow">
+            <button className="obtn" onClick={() => ttfRef.current.click()}>load .ttf/.otf</button>
+            <button className="obtn" onClick={downloadTTF}>export .ttf</button>
           </div>
           <div className="frow">
             <button className="obtn" onClick={saveFontFile}>save .gfont</button>
@@ -352,6 +380,8 @@ export default function FontPanel({ params, set }) {
         </span>
         <input ref={fileRef} type="file" accept=".gfont,.json" style={{ display: 'none' }}
           onChange={(e) => { if (e.target.files[0]) loadFontFile(e.target.files[0]); e.target.value = ''; }} />
+        <input ref={ttfRef} type="file" accept=".ttf,.otf" style={{ display: 'none' }}
+          onChange={(e) => { if (e.target.files[0]) loadTTF(e.target.files[0]); e.target.value = ''; }} />
       </div>
     </div>
   );
