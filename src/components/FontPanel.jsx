@@ -1,12 +1,13 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CHARSET, newFont, glyphFor, renderGlyphCell, renderText, makeRune, seedRng, importTTF, exportTTF, distortGlyph, DESTROY_PRESETS } from '../font.js';
 
-// memoized grid cell — re-renders only when ITS glyph/weight/mode changes
-const Cell = memo(function Cell({ gl, weight, mode, c, act, onPick }) {
-  const img = useMemo(
-    () => (gl ? renderGlyphCell({ glyphs: { [c]: gl }, weight, mode }, c, 34).toDataURL() : null),
-    [gl, weight, mode, c]
-  );
+// memoized grid cell — re-renders when ITS glyph/ops/weight/mode change
+const Cell = memo(function Cell({ gl, ops, font, c, act, onPick }) {
+  const img = useMemo(() => {
+    if (!gl) return null;
+    const g = ops ? distortGlyph(gl, ops, font, seedRng(c.charCodeAt(0) * 7919 + 3)) : gl;
+    return renderGlyphCell({ ...font, glyphs: { [c]: g } }, c, 34).toDataURL();
+  }, [gl, ops, font, c]);
   return (
     <button className={`cell${act ? ' act' : ''}${gl ? ' has' : ''}`}
       title={c} onClick={() => onPick(c)}>
@@ -43,6 +44,12 @@ export default function FontPanel({ params, set }) {
   const VS = 520;
 
   const gl = font ? (font.glyphs[ch] || { paths: [] }) : null;
+  const opsActive = Object.entries(ops).some(([k, v]) => v !== OPS0[k]);
+  // live destroy preview — deterministic rng per glyph so sliders morph smoothly
+  const glView = useMemo(
+    () => (gl && opsActive ? distortGlyph(gl, ops, font, seedRng(ch.charCodeAt(0) * 7919 + 3)) : gl),
+    [gl, ops, opsActive, font, ch]
+  );
   const sc = VS * 0.62 / (font?.upm || 700);
   const ox = VS * 0.18, oy = VS * 0.72;         // origin: baseline-left on screen
 
@@ -86,12 +93,12 @@ export default function FontPanel({ params, set }) {
     x.beginPath(); x.moveTo(gx, 0); x.lineTo(gx, VS); x.stroke(); x.setLineDash([]);
     x.fillStyle = '#5c5c3a'; x.fillText('adv', gx + 3, VS - 6);
 
-    if (gl) {
-      // filled preview
+    if (glView) {
+      // filled preview (with live destroy applied)
       x.save();
       x.globalAlpha = 0.85;
-      const cl = { paths: gl.paths.filter((p) => p.closed) };
-      const op = { paths: gl.paths.filter((p) => !p.closed) };
+      const cl = { paths: glView.paths.filter((p) => p.closed) };
+      const op = { paths: glView.paths.filter((p) => !p.closed) };
       x.lineJoin = 'round'; x.lineCap = 'round'; x.lineWidth = font.weight * sc;
       const trace = (paths) => {
         for (const p of paths) {
@@ -111,8 +118,8 @@ export default function FontPanel({ params, set }) {
       if (cl.paths.length && (font.mode === 'stroke')) { trace(cl.paths); x.strokeStyle = '#c8c2b0'; x.stroke(); }
       if (op.paths.length) { trace(op.paths); x.strokeStyle = '#c8c2b0'; x.stroke(); }
       x.restore();
-      // nodes + handles
-      gl.paths.forEach((p, pi) => {
+      // nodes + handles (drawn where they ARE under live distortion)
+      glView.paths.forEach((p, pi) => {
         p.pts.forEach((pt, i) => {
           const [sx, sy] = toScreen(pt);
           const isSel = sel && sel.pi === pi && sel.i === i;
@@ -150,6 +157,7 @@ export default function FontPanel({ params, set }) {
 
   function down(e) {
     if (!font) return;
+    if (opsActive) { destroy(false); return; }   // first click bakes live distortion
     const r = cvsRef.current.getBoundingClientRect();
     const sx = (e.clientX - r.left) * (VS / r.width), sy = (e.clientY - r.top) * (VS / r.height);
     cvsRef.current.setPointerCapture(e.pointerId);
@@ -292,7 +300,13 @@ export default function FontPanel({ params, set }) {
     });
   }
 
-  const prev = font && renderText(font, testStr, 46, { tracking: font.track, warp: params.text?.warp || 0 });
+  const prev = useMemo(() => {
+    if (!font) return null;
+    const f2 = opsActive
+      ? { ...font, glyphs: Object.fromEntries(Object.entries(font.glyphs).map(([k, g]) => [k, distortGlyph(g, ops, font, seedRng(k.charCodeAt(0) * 7919 + 3))])) }
+      : font;
+    return renderText(f2, testStr, 46, { tracking: font.track, warp: params.text?.warp || 0 });
+  }, [font, ops, opsActive, testStr, params.text?.warp]);
 
   return (
     <div className="fontmode">
@@ -316,7 +330,7 @@ export default function FontPanel({ params, set }) {
         <div className="cells">
           {[...CHARSET].map((c) => (
             font ? (
-              <Cell key={c} gl={font.glyphs[c]} weight={font.weight} mode={font.mode}
+              <Cell key={c} gl={font.glyphs[c]} ops={opsActive ? ops : null} font={font}
                 c={c} act={c === ch}
                 onPick={(cc) => { setCh(cc); setSel(null); }} />
             ) : (
