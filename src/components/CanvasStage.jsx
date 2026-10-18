@@ -679,7 +679,7 @@ export default function CanvasStage({ params, apiRef, previewRef, onLayersChange
     const f = fonts[Math.min(fi, fonts.length - 1)];
     if (f && !tp.src?.startsWith('sys:')) {
       r = renderText(f, tp.str, tp.size, {
-        tracking: tp.tracking ?? f.track, warp: tp.warp || 0,
+        tracking: f.track + (tp.tracking || 0), warp: tp.warp || 0,
       });
     } else {
       const sysName = tp.src?.startsWith('sys:') ? tp.src.slice(4) : 'Helvetica';

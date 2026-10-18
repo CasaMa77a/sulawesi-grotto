@@ -226,7 +226,9 @@ export function importTTF(buf, name) {
   f.mode = 'fill';
   let advSum = 0, advN = 0;
   for (const ch of [...CHARSET]) {
-    const g = ot.charToGlyph(ch);
+    const gi = ot.charToGlyphIndex(ch);
+    if (!gi) continue;                     // missing char → skip .notdef box
+    const g = ot.glyphs.get(gi);
     if (!g || !g.path || !g.path.commands.length) continue;
     const paths = [];
     let cur = null;
@@ -259,6 +261,7 @@ export function importTTF(buf, name) {
 export function exportTTF(font) {
   const K = 1000 / font.upm;                  // scale up to classic upm 1000
   const glyphs = [new opentype.Glyph({ name: '.notdef', unicode: 0, advanceWidth: font.glyphW * K, path: new opentype.Path() })];
+  glyphs.push(new opentype.Glyph({ name: 'space', unicode: 32, advanceWidth: font.glyphW * 0.55 * K, path: new opentype.Path() }));
   const strip = (a, b, w) => {                // segment → thin quad strip
     const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
     const nx = (-dy / L) * w, ny = (dx / L) * w;

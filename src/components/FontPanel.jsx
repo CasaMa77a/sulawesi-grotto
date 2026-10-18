@@ -137,6 +137,10 @@ export default function FontPanel({ params, set }) {
     }
     x.fillStyle = '#555'; x.font = '10px monospace'; x.textAlign = 'left';
     x.fillText(`glyph ${ch} · ${tool}`, 6, 14);
+    if (opsActive) {
+      x.fillStyle = '#ffb050'; x.font = '9px monospace'; x.textAlign = 'right';
+      x.fillText('◉ LIVE DESTROY — click canvas or apply to bake', VS - 6, 14);
+    }
   });
 
   // ---------- pointer ----------
@@ -308,8 +312,21 @@ export default function FontPanel({ params, set }) {
     return renderText(f2, testStr, 46, { tracking: font.track, warp: params.text?.warp || 0 });
   }, [font, ops, opsActive, testStr, params.text?.warp]);
 
+  // drag&drop a .ttf/.otf/.gfont anywhere in font mode (typoclast-style)
+  function onDrop(e) {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (!f) return;
+    const ext = f.name.toLowerCase().split('.').pop();
+    if (ext === 'ttf' || ext === 'otf') loadTTF(f);
+    else if (ext === 'gfont' || ext === 'json') loadFontFile(f);
+    else setMsg('✕ drop a .ttf / .otf / .gfont');
+  }
+
   return (
-    <div className="fontmode">
+    <div className="fontmode"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={onDrop}>
       <div className="fgrid">
         <div className="fgrid-head">
           <button className="obtn" onClick={() => {
@@ -413,10 +430,10 @@ export default function FontPanel({ params, set }) {
           {prev && <img className="ftest" src={prev.c.toDataURL()} alt="preview" />}
         </>)}
         <span className="ohint">
+          drop .ttf/.otf anywhere to import<br />
           pen: click = add node · click 1st = close<br />
           node: drag · alt+click = delete<br />
-          curve seg then drag the ■ handle<br />
-          destroy is destructive — sliders reset on apply
+          sliders distort LIVE · apply/click = bake
         </span>
         {msg && <span className="fmsg">{msg}</span>}
         <input ref={fileRef} type="file" accept=".gfont,.json" style={{ display: 'none' }}
