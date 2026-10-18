@@ -246,6 +246,13 @@ export function importTTF(buf, name) {
       }
       else if (cmd.type === 'Z' && cur) cur.closed = true;
     }
+    // CFF/OTF contours auto-close without emitting Z → detect & close
+    for (const p of paths) {
+      if (p.pts.length < 3) continue;
+      const a = p.pts[0], b = p.pts[p.pts.length - 1];
+      if (Math.abs(a.x - b.x) < 0.6 && Math.abs(a.y - b.y) < 0.6) { p.pts.pop(); p.closed = true; }
+      else p.closed = true;   // font contours are always closed shapes
+    }
     const adv = Math.round((g.advanceWidth || ot.unitsPerEm * 0.6) * sc);
     if (paths.some((p) => p.pts.length > 1)) {
       f.glyphs[ch] = { paths, w: adv };
