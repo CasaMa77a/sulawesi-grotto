@@ -225,6 +225,7 @@ html, body, #root { height: 100%; background: var(--bg); color: var(--txt); }
   border-bottom: 1px solid var(--line); padding: 6px 0 3px;
   text-transform: uppercase;
 }
+.fmsg { font-size: 9px; color: var(--acc); }
 
 .eye.fx { font-size: 8px; letter-spacing: .05em; opacity: .45; }
 .eye.fx.fxon { opacity: 1; color: var(--acc); }

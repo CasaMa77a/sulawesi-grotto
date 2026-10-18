@@ -1,11 +1,11 @@
-import opentype from 'opentype.js';
+import * as opentype from 'opentype.js';
 
 // ---------- custom font engine ----------
 // glyph space: y-up in font units (upm), baseline = 0, cap = font.cap, descender = -font.desc
 // path: { closed:bool, pts:[{x,y,c:{x,y}|null}] }  — c = quadratic control towards NEXT point
 // render: closed paths fill (fill mode) or stroke; open paths always stroke (weight)
 
-export const CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?.,-\'/\\:;';
+export const CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.,-\'/\\:;()@#&';
 
 export function newFont(name = 'new font') {
   return {
@@ -328,31 +328,37 @@ export function distortGlyph(gl, ops, font, rng = Math.random) {
   const b = glyphBounds(gl);
   const cx = b ? (b[0] + b[2]) / 2 : adv / 2, cy = b ? (b[1] + b[3]) / 2 : font.cap / 2;
 
-  // chop: subdivide segments → more nodes to destroy (call before transforms)
+  // chop: subdivide segments → more nodes to destroy, curves preserved
   if (ops.chop > 0.5) {
     const n = Math.round(ops.chop);
     for (const p of paths) {
       const out = [];
-      const len = p.pts.length;
-      for (let i = 0; i < len; i++) {
-        const a = p.pts[i % p.pts.length], bq = p.pts[(i + 1) % p.pts.length];
-        out.push(a);
-        if (!bq) break;
-        for (let k = 1; k <= n; k++) {
-          const t = k / (n + 1);
-          if (a.c) {   // quadratic midpoint approx
-            const mt = (tt) => ({
-              x: (1 - tt) ** 2 * a.x + 2 * tt * (1 - tt) * a.c.x + tt ** 2 * bq.x,
-              y: (1 - tt) ** 2 * a.y + 2 * tt * (1 - tt) * a.c.y + tt ** 2 * bq.y,
-              c: null,
+      for (let i = 0; i < p.pts.length; i++) {
+        const a = p.pts[i];
+        const bq = p.closed ? p.pts[(i + 1) % p.pts.length] : p.pts[i + 1];
+        if (!bq || !a.c) { out.push({ ...a }); if (!bq) break; }
+        else {
+          // subdivide quad into n+1 sub-arcs: anchors at B(t), controls on tangent
+          const L = n + 1;
+          for (let k = 0; k <= n; k++) {
+            const t = k / L;
+            const px = (1 - t) ** 2 * a.x + 2 * t * (1 - t) * a.c.x + t ** 2 * bq.x;
+            const py = (1 - t) ** 2 * a.y + 2 * t * (1 - t) * a.c.y + t ** 2 * bq.y;
+            out.push({
+              x: px, y: py,
+              c: {
+                x: px + ((1 - t) * (a.c.x - a.x) + t * (bq.x - a.c.x)) / L,
+                y: py + ((1 - t) * (a.c.y - a.y) + t * (bq.y - a.c.y)) / L,
+              },
             });
-            out.push(mt(t));
-          } else out.push({ x: a.x + (bq.x - a.x) * t, y: a.y + (bq.y - a.y) * t, c: null });
+          }
+        }
+        for (let k = 1; k <= n && !a.c; k++) {
+          const t = k / (n + 1);
+          out.push({ x: a.x + (bq.x - a.x) * t, y: a.y + (bq.y - a.y) * t, c: null });
         }
       }
       p.pts = out;
-      // strip controls on chopped curves (polygonize feel)
-      for (const q of p.pts) q.c = null;
     }
   }
   if (ops.rotate) {

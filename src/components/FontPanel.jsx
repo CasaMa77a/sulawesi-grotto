@@ -1,5 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CHARSET, newFont, glyphFor, renderGlyphCell, renderText, makeRune, seedRng, importTTF, exportTTF, distortGlyph, DESTROY_PRESETS } from '../font.js';
+
+// memoized grid cell — re-renders only when ITS glyph/weight/mode changes
+const Cell = memo(function Cell({ gl, weight, mode, c, act, onPick }) {
+  const img = useMemo(
+    () => (gl ? renderGlyphCell({ glyphs: { [c]: gl }, weight, mode }, c, 34).toDataURL() : null),
+    [gl, weight, mode, c]
+  );
+  return (
+    <button className={`cell${act ? ' act' : ''}${gl ? ' has' : ''}`}
+      title={c} onClick={() => onPick(c)}>
+      {img ? <img src={img} alt="" /> : <span>{c}</span>}
+    </button>
+  );
+});
 
 const Mini = ({ label, value, min, max, step = 1, onChange }) => (
   <label className="mini">
@@ -20,6 +34,8 @@ export default function FontPanel({ params, set }) {
   const [sel, setSel] = useState(null);      // {pi, i} path index + point index | 'c'
   const [testStr, setTestStr] = useState('SIGIL');
   const [ops, setOps] = useState({ noise: 0, melt: 0, spike: 0, push: 0, rotate: 0, skew: 0, slices: 0, sliceOff: 40, snap: 0, chop: 0 });
+  const [msg, setMsg] = useState('');
+  const OPS0 = { noise: 0, melt: 0, spike: 0, push: 0, rotate: 0, skew: 0, slices: 0, sliceOff: 40, snap: 0, chop: 0 };
   const cvsRef = useRef(null);
   const dragRef = useRef(null);
   const fileRef = useRef(null);
@@ -220,9 +236,15 @@ export default function FontPanel({ params, set }) {
     rd.onload = () => {
       try {
         const nf = importTTF(rd.result, file.name.replace(/\.[^.]+$/, ''));
+        const n = Object.keys(nf.glyphs).length;
+        if (!n) throw new Error('no glyphs');
         set(null, 'fonts', [...fonts, nf]);
         set(null, 'fontSel', fonts.length);
-      } catch (err) { console.error('font parse failed', err); }
+        setMsg(`${nf.name}: ${n} glyphs imported`);
+      } catch (err) {
+        console.error('font parse failed', err);
+        setMsg('✕ could not parse font file');
+      }
     };
     rd.readAsArrayBuffer(file);
   }
@@ -237,7 +259,9 @@ export default function FontPanel({ params, set }) {
   }
 
   // destructively apply current ops — to one glyph or the whole font
+  // sliders reset after apply so a second click doesn't double-destroy
   function destroy(all) {
+    if (!font) return;
     const rng = seedRng(Date.now() & 0xffff);
     update((f) => {
       const keys = all ? Object.keys(f.glyphs) : [ch];
@@ -247,6 +271,8 @@ export default function FontPanel({ params, set }) {
       }
       return f;
     });
+    setOps({ ...OPS0 });
+    setMsg(all ? `destroyed ${Object.keys(font.glyphs).length} glyphs` : `destroyed ${ch}`);
   }
 
   const mutate = () => {
@@ -288,16 +314,15 @@ export default function FontPanel({ params, set }) {
           </div>
         )}
         <div className="cells">
-          {[...CHARSET].map((c) => {
-            const gc = font ? renderGlyphCell(font, c, 34) : null;
-            return (
-              <button key={c} className={`cell${c === ch ? ' act' : ''}${font?.glyphs[c] ? ' has' : ''}`}
-                title={c} onClick={() => { setCh(c); setSel(null); }}>
-                {gc && <img src={gc.toDataURL()} alt="" />}
-                {!gc && <span>{c}</span>}
-              </button>
-            );
-          })}
+          {[...CHARSET].map((c) => (
+            font ? (
+              <Cell key={c} gl={font.glyphs[c]} weight={font.weight} mode={font.mode}
+                c={c} act={c === ch}
+                onPick={(cc) => { setCh(cc); setSel(null); }} />
+            ) : (
+              <button key={c} className="cell"><span>{c}</span></button>
+            )
+          ))}
         </div>
       </div>
 
@@ -376,8 +401,10 @@ export default function FontPanel({ params, set }) {
         <span className="ohint">
           pen: click = add node · click 1st = close<br />
           node: drag · alt+click = delete<br />
-          curve seg then drag the ■ handle
+          curve seg then drag the ■ handle<br />
+          destroy is destructive — sliders reset on apply
         </span>
+        {msg && <span className="fmsg">{msg}</span>}
         <input ref={fileRef} type="file" accept=".gfont,.json" style={{ display: 'none' }}
           onChange={(e) => { if (e.target.files[0]) loadFontFile(e.target.files[0]); e.target.value = ''; }} />
         <input ref={ttfRef} type="file" accept=".ttf,.otf" style={{ display: 'none' }}
