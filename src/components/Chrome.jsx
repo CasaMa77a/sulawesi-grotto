@@ -73,6 +73,9 @@ export function MenuBar({ apiRef, showTile, onToggleTile }) {
 
 const ToolIcon = ({ t }) => {
   const s = { width: 16, height: 16, display: 'block' };
+  if (t === 'text') return (
+    <svg {...s} viewBox="0 0 16 16"><path d="M2 3 L14 3 L14 5.5 L12.5 5.5 L12.5 4.5 L9.5 4.5 L9.5 12.5 L11 12.5 L11 14 L5 14 L5 12.5 L6.5 12.5 L6.5 4.5 L3.5 4.5 L3.5 5.5 L2 5.5 Z" fill="currentColor"/></svg>
+  );
   if (t === 'liquify') return (
     <svg {...s} viewBox="0 0 16 16"><path d="M2 15 L3.5 9 L1.5 4 L4.5 7 L5.5 1 L7.5 8 L6.5 15 Z" fill="currentColor"/><path d="M9 15 L10 10 L9 4 L12 8 L13 2 L15 9 L14 15 Z" fill="currentColor"/></svg>
   );
@@ -93,12 +96,13 @@ const ToolIcon = ({ t }) => {
   );
 };
 
-export function Toolbar({ tool, setTool }) {
+export function Toolbar({ tool, setTool, docMode, setDocMode }) {
   const tools = [
     ['move', 'Move — pick & drag layers (V)'],
     ['brush', 'Brush — draw relief strokes (B)'],
     ['eraser', 'Eraser — carve away (E)'],
     ['wand', 'Magic Wand — select image chunks (W)'],
+    ['text', 'Type — stamp text / custom font (T)'],
     ['smudge', 'Smudge — drag relief like wet clay (S)'],
     ['liquify', 'Liquify — warp & taper into spikes (L)'],
   ];
@@ -111,7 +115,15 @@ export function Toolbar({ tool, setTool }) {
         </button>
       ))}
       <div className="tsep" />
-      <span className="thint">B·E·W</span>
+      <button title="Drawing mode" className={`tbtn mode ${docMode === 'draw' ? 'act' : ''}`}
+        onClick={() => setDocMode('draw')}>
+        <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M4 11 L8 4 L12 11" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
+      </button>
+      <button title="Font mode — design glyphs on a vector grid" className={`tbtn mode font${docMode === 'font' ? ' act' : ''}`}
+        onClick={() => setDocMode('font')}>
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 13 L8 2 L13 13 L10.5 13 L9.5 10 L6.5 10 L5.5 13 Z" fill="currentColor"/><rect x="7" y="8" width="2" height="1.2" fill="#000"/></svg>
+      </button>
+      <span className="thint">{docMode === 'font' ? 'FONT' : 'B·E·W'}</span>
     </div>
   );
 }
@@ -145,6 +157,32 @@ export function OptionsBar({ params, set, apiRef, onBrushLib }) {
         <button className="obtn" onClick={() => apiRef.current?.commitStamp()}>stamp ↓</button>
         <button className="obtn" onClick={() => apiRef.current?.discardStamp()}>✕</button>
         <span className="ohint">click=select · shift=add · alt=sub · drag=move</span>
+      </>) : tool === 'text' ? (<>
+        <input className="bname ttxt" placeholder="text…" value={params.text.str}
+          onChange={(e) => set('text', 'str', e.target.value)} />
+        <select className="oselect" value={params.text.src}
+          onChange={(e) => set('text', 'src', e.target.value)}>
+          <option value="custom">◈ active font</option>
+          {(params.fonts || []).length > 0 &&
+            <optgroup label="custom fonts">
+              {params.fonts.map((f, i) => (
+                <option key={f.id} value={`cf:${i}`}>◈ {f.name}</option>
+              ))}
+            </optgroup>}
+          <optgroup label="system">
+            {['Helvetica', 'Times New Roman', 'Courier New', 'Georgia', 'Impact', 'serif', 'monospace'].map((f) => (
+              <option key={f} value={`sys:${f}`}>{f}</option>
+            ))}
+          </optgroup>
+        </select>
+        <Mini label="size" value={params.text.size} min={16} max={700} onChange={(v) => set('text', 'size', v)} />
+        {params.text.src === 'custom' || params.text.src.startsWith('cf:') ? (
+          <Mini label="tracking" value={params.text.tracking} min={-80} max={400} onChange={(v) => set('text', 'tracking', v)} />
+        ) : null}
+        <Mini label="warp" value={params.text.warp} min={-1} max={1} step={0.05} onChange={(v) => set('text', 'warp', v)} />
+        <button className="obtn" onClick={() => apiRef.current?.commitStamp()}>stamp ↓</button>
+        <button className="obtn" onClick={() => apiRef.current?.discardStamp()}>✕</button>
+        <span className="ohint">click canvas = place · corners scale · enter stamps</span>
       </>) : (<>
         <select className="oselect" value={params.brush.type} onChange={(e) => set('brush', 'type', e.target.value)}>
           <option value="soft">soft</option>

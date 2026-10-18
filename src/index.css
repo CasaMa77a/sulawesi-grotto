@@ -107,6 +107,7 @@ html, body, #root { height: 100%; background: var(--bg); color: var(--txt); }
 
 /* canvas area */
 .canvasArea {
+  position: relative;
   flex: 1; display: flex; align-items: center; justify-content: center;
   gap: 20px; padding: 20px; min-height: 0; overflow: hidden;
   background:
@@ -175,6 +176,50 @@ html, body, #root { height: 100%; background: var(--bg); color: var(--txt); }
   border: 1px solid var(--line2); padding: 3px 6px; font: inherit; font-size: 10px;
 }
 .bname:focus { outline: none; border-color: var(--acc); }
+.ttxt { flex: none; width: 110px; }
+
+/* ── font mode ── */
+.fontmode {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  background: rgba(10,10,10,.92); padding: 14px;
+}
+.fgrid {
+  width: 268px; max-height: 100%; overflow: auto; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--panel); border: 1px solid var(--line2); padding: 8px;
+}
+.fgrid-head { display: flex; gap: 6px; }
+.frow { display: flex; gap: 5px; flex-wrap: wrap; }
+.cells {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px;
+}
+.cell {
+  aspect-ratio: 1; background: #0a0a0a; border: 1px solid var(--line);
+  color: var(--dim); font-size: 11px; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.cell img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.cell.has { border-color: #3a4a3a; }
+.cell.act { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+.cell:hover { border-color: var(--acc); }
+.feditcv {
+  width: min(520px, 46vh); height: min(520px, 46vh); flex-shrink: 0;
+  border: 1px solid var(--line2); background: #0c0c0c;
+  box-shadow: 0 0 0 1px var(--line), 4px 4px 0 rgba(0,0,0,.5);
+  cursor: crosshair; touch-action: none;
+}
+.fctrl {
+  width: 190px; flex-shrink: 0; max-height: 100%; overflow: auto;
+  display: flex; flex-direction: column; gap: 7px;
+  background: var(--panel); border: 1px solid var(--line2); padding: 8px;
+}
+.fctrl .mini input[type='range'] { width: 100%; }
+.fctrl .ohint { margin-left: 0; line-height: 1.5; }
+.ftest {
+  width: 100%; background: #000; border: 1px solid var(--line2);
+  image-rendering: pixelated;
+}
 
 .eye.fx { font-size: 8px; letter-spacing: .05em; opacity: .45; }
 .eye.fx.fxon { opacity: 1; color: var(--acc); }

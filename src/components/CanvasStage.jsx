@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { fbmNoise, maskFromNoise, edgeMask, blurF32, buildLUT, renderRelief, crackField, hexToRgb, applyDither, floodSelect, globalSelect, rootsField } from '../engine.js';
+import { renderText } from '../font.js';
 
 let layerId = 0;
 const mkLayer = (w, h, name) => {
@@ -251,7 +252,7 @@ export default function CanvasStage({ params, apiRef, previewRef, onLayersChange
       dctx.drawImage(s.fxTmp, 0, 0);
       dctx.restore();
     }
-    if (p.tool === 'wand' && s.stamp) drawStampUI();
+    if ((p.tool === 'wand' || p.tool === 'text') && s.stamp) drawStampUI();
     if (p.tool === 'move') drawMoveUI();
     s.version = (s.version || 0) + 1;
     updateTilePreview();
@@ -345,7 +346,7 @@ export default function CanvasStage({ params, apiRef, previewRef, onLayersChange
       dctx.drawImage(s.fxTmpH, 0, 0, W, H);
       dctx.restore();
     }
-    if (p.tool === 'wand' && s.stamp) drawStampUI();
+    if ((p.tool === 'wand' || p.tool === 'text') && s.stamp) drawStampUI();
     if (p.tool === 'move') drawMoveUI();
     s.version = (s.version || 0) + 1;
   }
@@ -664,6 +665,33 @@ export default function CanvasStage({ params, apiRef, previewRef, onLayersChange
     c.getContext('2d').putImageData(id, 0, 0);
     ci.getContext('2d').putImageData(idi, 0, 0);
     s.stamp = { c, ci, w: sw, h: sh, pos: [x0, y0] };
+    redrawFloat();
+  }
+
+  // render text (custom vector font or system font) → floating stamp
+  function placeTextStamp(p) {
+    const s = st.current, tp = pref.current.text;
+    if (!tp || !tp.str) return;
+    const fonts = pref.current.fonts || [];
+    let r = null;
+    const m = /^cf:(\d+)$/.exec(tp.src || '');
+    const fi = m ? +m[1] : (pref.current.fontSel || 0);
+    const f = fonts[Math.min(fi, fonts.length - 1)];
+    if (f && !tp.src?.startsWith('sys:')) {
+      r = renderText(f, tp.str, tp.size, {
+        tracking: tp.tracking ?? f.track, warp: tp.warp || 0,
+      });
+    } else {
+      const sysName = tp.src?.startsWith('sys:') ? tp.src.slice(4) : 'Helvetica';
+      r = renderText(null, tp.str, tp.size, { sysFont: sysName });
+    }
+    if (!r) return;
+    const ci = document.createElement('canvas');
+    ci.width = r.w; ci.height = r.h;
+    const cx2 = ci.getContext('2d');
+    cx2.filter = 'invert(1)';
+    cx2.drawImage(r.c, 0, 0);
+    s.stamp = { c: r.c, ci, w: r.w, h: r.h, pos: [p[0] - r.w / 2, p[1] - r.h / 2] };
     redrawFloat();
   }
 
@@ -1014,7 +1042,7 @@ export default function CanvasStage({ params, apiRef, previewRef, onLayersChange
       return;
     }
     displayRef.current.setPointerCapture(e.pointerId);
-    if (pref.current.tool === 'wand') {
+    if (pref.current.tool === 'wand' || (pref.current.tool === 'text' && st.current.stamp)) {
       const s = st.current;
       const p = pos(e);
       if (s.stamp) {
@@ -1032,9 +1060,12 @@ export default function CanvasStage({ params, apiRef, previewRef, onLayersChange
           if (hit === 'move') { s.wandDrag = true; s.wandLast = p; }
           return;
         }
-        commitStamp(); // click outside → commit, then select
+        commitStamp(); // click outside → commit, then select / place new
       }
-      wandDown(e);
+      if (pref.current.tool === 'wand') { wandDown(e); return; }
+    }
+    if (pref.current.tool === 'text') {
+      placeTextStamp(pos(e));
       return;
     }
     if (pref.current.tool === 'move') {
@@ -1197,6 +1228,7 @@ export default function CanvasStage({ params, apiRef, previewRef, onLayersChange
       if (e.key === 'v' || e.key === 'V') onToolChange?.('move');
       if (e.key === 's' || e.key === 'S') onToolChange?.('smudge');
       if (e.key === 'l' || e.key === 'L') onToolChange?.('liquify');
+      if (e.key === 't' || e.key === 'T') onToolChange?.('text');
       if (e.key === 'Enter') actionRef.current.commitStamp();
       if (e.key === 'Escape') actionRef.current.discardStamp();
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); actionRef.current.undo(); }

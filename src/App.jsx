@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import CanvasStage from './components/CanvasStage.jsx';
 import Controls from './components/Controls.jsx';
+import FontPanel from './components/FontPanel.jsx';
 import { MenuBar, Toolbar, OptionsBar, StatusBar, BrushEditor } from './components/Chrome.jsx';
 
 const DEFAULTS = {
@@ -21,6 +22,10 @@ const DEFAULTS = {
   surf: { erosion: 0, mottle: 0, grain: 0, cracks: 0, seed: 11, scales: 0, chrome: 0, vign: 0, ao: 0, corro: 0 },
   curve: [{ x: 0, y: 0 }, { x: 0.25, y: 1 }, { x: 0.5, y: 0 }, { x: 0.75, y: 1 }, { x: 1, y: 0 }],
   mesh: { ext: 0.18, base: 0.05, res: 160, smooth: true, cut: 0.06, exposure: 1.3, rough: 0.4, metal: 0.3, trim: true },
+  docMode: 'draw',
+  fonts: [],
+  fontSel: 0,
+  text: { str: 'SIGIL', size: 140, tracking: 0, warp: 0, src: 'custom' },
 };
 
 export default function App() {
@@ -60,7 +65,8 @@ export default function App() {
     <div className="app">
       <MenuBar apiRef={apiRef} showTile={showTile} onToggleTile={() => setShowTile(!showTile)} />
       <div className="workspace">
-        <Toolbar tool={params.tool} setTool={(t) => set(null, 'tool', t)} />
+        <Toolbar tool={params.tool} setTool={(t) => set(null, 'tool', t)}
+          docMode={params.docMode} setDocMode={(m) => set(null, 'docMode', m)} />
         <div className="centerCol">
           <OptionsBar params={params} set={set} apiRef={apiRef} onBrushLib={() => setBrushEditor(true)} />
           <div className="canvasArea">
@@ -73,7 +79,8 @@ export default function App() {
               onParam={set}
               onProject={(p2) => setParams((prev) => ({ ...prev, ...p2 }))}
             />
-            {showTile && (
+            {params.docMode === 'font' && <FontPanel params={params} set={set} />}
+            {showTile && params.docMode === 'draw' && (
               <div className="tileBox">
                 <canvas ref={previewRef} className="tilePreview" width={330} height={330} />
                 <span>tile ×3</span>
