@@ -43,6 +43,59 @@ export function traceGlyph(ctx, paths, ox, oy, sc) {
   }
 }
 
+// ---------- winding: fonts need nonzero fill; normalize so nested paths are counters ----------
+function signedArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return a / 2;
+}
+
+function pathBBox(p) {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const q of p.pts) {
+    if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x;
+    if (q.y < y0) y0 = q.y; if (q.y > y1) y1 = q.y;
+  }
+  return [x0, y0, x1, y1];
+}
+
+// reverse a closed path's direction (controls ride along to the previous anchor)
+function reversePath(p) {
+  const n = p.pts.length, pts = [];
+  for (let k = 0; k < n; k++) {
+    const src = p.pts[(n - k) % n];
+    const ctrl = p.pts[(n - k - 1 + n) % n].c;
+    pts.push({ x: src.x, y: src.y, c: ctrl ? { x: ctrl.x, y: ctrl.y } : null });
+  }
+  return { closed: p.closed, pts };
+}
+
+// order winding so that a contour inside another always has the opposite direction
+export function normalizeWind(paths) {
+  const closed = paths.filter((p) => p.closed).map((p) => ({ p, area: signedArea(p.pts), b: pathBBox(p), depth: 0, sign: 0 }));
+  const open = paths.filter((p) => !p.closed);
+  closed.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
+  const done = [];
+  for (const it of closed) {
+    const cxm = (it.b[0] + it.b[2]) / 2, cym = (it.b[1] + it.b[3]) / 2;
+    let parent = null;
+    for (const o of done) {
+      if (o.b[0] <= cxm && cxm <= o.b[2] && o.b[1] <= cym && cym <= o.b[3]) {
+        if (!parent || Math.abs(o.area) < Math.abs(parent.area)) parent = o;
+      }
+    }
+    it.depth = parent ? parent.depth + 1 : 0;
+    const rootSign = parent ? parent.sign : Math.sign(it.area) || 1;
+    it.sign = rootSign * (it.depth % 2 ? -1 : 1);
+    done.push(it);
+  }
+  const out = done.map((it) => (Math.sign(it.area) !== it.sign && it.area !== 0 ? reversePath(it.p) : it.p));
+  return [...out, ...open];
+}
+
 export function glyphBounds(gl) {
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const p of gl.paths) for (const q of p.pts) {
@@ -62,7 +115,7 @@ function paintGlyph(ctx, font, gl, ox, oy, sc) {
   if (font.mode === 'fill' && closed.paths.length) {
     traceGlyph(ctx, closed.paths, ox, oy, sc);
     ctx.fillStyle = '#fff';
-    ctx.fill('evenodd');
+    ctx.fill('nonzero');
   }
   if (font.mode === 'stroke' && closed.paths.length) {
     traceGlyph(ctx, closed.paths, ox, oy, sc);

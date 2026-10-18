@@ -1,6 +1,16 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { CHARSET, newFont, glyphFor, renderGlyphCell, renderText, makeRune, seedRng, importTTF, exportTTF, distortGlyph, DESTROY_PRESETS } from '../font.js';
 
+// reverse a point list keeping quadratic controls attached to the right segment
+function revPts(pts) {
+  const n = pts.length;
+  return pts.map((_, k) => {
+    const src = pts[(n - k) % n];
+    const ctrl = pts[(n - k - 1 + n) % n].c;
+    return { x: src.x, y: src.y, c: ctrl ? { x: ctrl.x, y: ctrl.y } : null };
+  });
+}
+
 // memoized grid cell — re-renders when ITS glyph/ops/weight/mode change
 const Cell = memo(function Cell({ gl, ops, font, c, act, onPick }) {
   const img = useMemo(() => {
@@ -114,7 +124,7 @@ export default function FontPanel({ params, set }) {
           if (p.closed) x.closePath();
         }
       };
-      if (font.mode === 'fill' && cl.paths.length) { trace(cl.paths); x.fillStyle = '#c8c2b0'; x.fill('evenodd'); }
+      if (font.mode === 'fill' && cl.paths.length) { trace(cl.paths); x.fillStyle = '#c8c2b0'; x.fill('nonzero'); }
       if (cl.paths.length && (font.mode === 'stroke')) { trace(cl.paths); x.strokeStyle = '#c8c2b0'; x.stroke(); }
       if (op.paths.length) { trace(op.paths); x.strokeStyle = '#c8c2b0'; x.stroke(); }
       x.restore();
@@ -366,6 +376,12 @@ export default function FontPanel({ params, set }) {
           <button className={`obtn${tool === 'node' ? ' on' : ''}`} onClick={() => setTool('node')}>node</button>
           <button className="obtn" onClick={() => { setGl({ paths: [...(gl?.paths || []), { closed: false, pts: [] }] }); setTool('pen'); }}>new path</button>
           <button className="obtn" onClick={curveSeg} disabled={!sel}>curve seg</button>
+          <button className="obtn" onClick={() => {         // reverse direction of sel path (fill vs hole)
+            if (!sel || !gl?.paths[sel.pi]) return;
+            const paths = gl.paths.map((p) => ({ ...p, pts: [...p.pts] }));
+            paths[sel.pi] = { closed: paths[sel.pi].closed, pts: revPts(paths[sel.pi].pts) };
+            setGl({ paths });
+          }} disabled={!sel}>flip dir</button>
         </div>
         {font && (<>
           <Mini label="weight" value={font.weight} min={8} max={200}
