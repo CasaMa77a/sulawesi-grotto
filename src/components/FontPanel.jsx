@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { CHARSET, newFont, glyphFor, renderGlyphCell, renderText, makeRune, seedRng } from '../font.js';
+import { CHARSET, newFont, glyphFor, renderGlyphCell, renderText, makeRune, seedRng,
+         FORGE_STYLES, forgeFont, forgeGlyph, fxGlyph } from '../font.js';
 
 const Mini = ({ label, value, min, max, step = 1, onChange }) => (
   <label className="mini">
@@ -19,6 +20,10 @@ export default function FontPanel({ params, set }) {
   const [tool, setTool] = useState('pen');   // pen | node
   const [sel, setSel] = useState(null);      // {pi, i} path index + point index | 'c'
   const [testStr, setTestStr] = useState('SIGIL');
+  const [style, setStyle] = useState('gothic');
+  const [chaos, setChaos] = useState(0.3);
+  const [seed, setSeed] = useState(7);
+  const [fx, setFx] = useState({ inflate: 0, rough: 0, spikes: 0, drip: 0, branch: 0, vein: 0 });
   const cvsRef = useRef(null);
   const dragRef = useRef(null);
   const fileRef = useRef(null);
@@ -219,6 +224,28 @@ export default function FontPanel({ params, set }) {
     });
   }
 
+  // guided generator — forge whole font / one glyph / mutate
+  function forgeAll() {
+    update((f) => { forgeFont(f, style, chaos, seed); return f; });
+    setSel(null);
+  }
+  function forgeOne(mut = false) {
+    const st = FORGE_STYLES[style];
+    const s = seed + ch.charCodeAt(0) * 7919 + (mut ? Date.now() & 0xfff : 0);
+    update((f) => { f.glyphs[ch] = forgeGlyph(f, ch, st, seedRng(s), chaos); return f; });
+    setSel(null);
+  }
+  // apply organic vector fx to glyph(s) — destructive, regenerate to revert
+  function applyFx(all) {
+    const rng = seedRng(Date.now() & 0xffff);
+    update((f) => {
+      const targets = all ? Object.keys(f.glyphs) : [ch];
+      for (const c of targets) if (f.glyphs[c]) f.glyphs[c] = fxGlyph(f, f.glyphs[c], fx, rng);
+      return f;
+    });
+    setSel(null);
+  }
+
   const prev = font && renderText(font, testStr, 46, { tracking: font.track, warp: params.text?.warp || 0 });
 
   return (
@@ -265,6 +292,29 @@ export default function FontPanel({ params, set }) {
           <button className="obtn" onClick={curveSeg} disabled={!sel}>curve seg</button>
         </div>
         {font && (<>
+          <div className="fsect">◈ forge</div>
+          <select className="oselect fsel" value={style} onChange={(e) => setStyle(e.target.value)}>
+            {Object.keys(FORGE_STYLES).map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <Mini label="chaos" value={chaos} min={0} max={1} step={0.05} onChange={setChaos} />
+          <Mini label="seed" value={seed} min={1} max={9999} onChange={setSeed} />
+          <div className="frow">
+            <button className="obtn fgo" onClick={forgeAll}>⚒ forge all</button>
+            <button className="obtn" onClick={() => forgeOne(false)}>glyph</button>
+            <button className="obtn" onClick={() => forgeOne(true)}>mutate</button>
+          </div>
+          <div className="fsect">organic fx</div>
+          <Mini label="inflate" value={fx.inflate} min={-1} max={1} step={0.05} onChange={(v) => setFx({ ...fx, inflate: v })} />
+          <Mini label="rough" value={fx.rough} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, rough: v })} />
+          <Mini label="spikes" value={fx.spikes} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, spikes: v })} />
+          <Mini label="drip" value={fx.drip} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, drip: v })} />
+          <Mini label="branch" value={fx.branch} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, branch: v })} />
+          <Mini label="vein" value={fx.vein} min={0} max={1} step={0.05} onChange={(v) => setFx({ ...fx, vein: v })} />
+          <div className="frow">
+            <button className="obtn" onClick={() => applyFx(false)}>fx glyph</button>
+            <button className="obtn" onClick={() => applyFx(true)}>fx all</button>
+          </div>
+          <div className="fsect">metrics</div>
           <Mini label="weight" value={font.weight} min={8} max={200}
             onChange={(v) => update((f) => { f.weight = v; return f; })} />
           <Mini label="glyph w" value={font.glyphW} min={200} max={900}

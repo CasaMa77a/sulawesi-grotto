@@ -220,6 +220,14 @@ html, body, #root { height: 100%; background: var(--bg); color: var(--txt); }
   width: 100%; background: #000; border: 1px solid var(--line2);
   image-rendering: pixelated;
 }
+.fsect {
+  font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--dim); border-bottom: 1px solid var(--line);
+  padding-bottom: 3px; margin-top: 2px;
+}
+.fsel { width: 100%; }
+.fgo { color: var(--acc); border-color: var(--acc); }
+.tbtn.mode { margin-top: 0; }
 
 .eye.fx { font-size: 8px; letter-spacing: .05em; opacity: .45; }
 .eye.fx.fxon { opacity: 1; color: var(--acc); }
