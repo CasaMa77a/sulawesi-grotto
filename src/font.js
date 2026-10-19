@@ -28,10 +28,10 @@ export function glyphAdvance(font, ch) {
 }
 
 // trace one glyph into ctx at scale sc, origin = baseline-left (screen y-down)
+// traces all paths into ONE current path (caller does beginPath + fill/stroke)
 export function traceGlyph(ctx, paths, ox, oy, sc) {
   for (const p of paths) {
     if (!p.pts.length) continue;
-    ctx.beginPath();
     ctx.moveTo(ox + p.pts[0].x * sc, oy - p.pts[0].y * sc);
     const n = p.pts.length + (p.closed ? 1 : 0);
     for (let i = 1; i < n; i++) {
@@ -113,16 +113,19 @@ function paintGlyph(ctx, font, gl, ox, oy, sc) {
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   ctx.lineWidth = font.weight * sc;
   if (font.mode === 'fill' && closed.paths.length) {
+    ctx.beginPath();
     traceGlyph(ctx, closed.paths, ox, oy, sc);
     ctx.fillStyle = '#fff';
     ctx.fill('nonzero');
   }
   if (font.mode === 'stroke' && closed.paths.length) {
+    ctx.beginPath();
     traceGlyph(ctx, closed.paths, ox, oy, sc);
     ctx.strokeStyle = '#fff';
     ctx.stroke();
   }
   if (open.paths.length) {
+    ctx.beginPath();
     traceGlyph(ctx, open.paths, ox, oy, sc);
     ctx.strokeStyle = '#fff';
     ctx.stroke();

@@ -113,7 +113,6 @@ export default function FontPanel({ params, set }) {
       const trace = (paths) => {
         for (const p of paths) {
           if (!p.pts.length) continue;
-          x.beginPath();
           x.moveTo(ox + p.pts[0].x * sc, oy - p.pts[0].y * sc);
           const n = p.pts.length + (p.closed ? 1 : 0);
           for (let i = 1; i < n; i++) {
@@ -124,9 +123,9 @@ export default function FontPanel({ params, set }) {
           if (p.closed) x.closePath();
         }
       };
-      if (font.mode === 'fill' && cl.paths.length) { trace(cl.paths); x.fillStyle = '#c8c2b0'; x.fill('nonzero'); }
-      if (cl.paths.length && (font.mode === 'stroke')) { trace(cl.paths); x.strokeStyle = '#c8c2b0'; x.stroke(); }
-      if (op.paths.length) { trace(op.paths); x.strokeStyle = '#c8c2b0'; x.stroke(); }
+      if (font.mode === 'fill' && cl.paths.length) { x.beginPath(); trace(cl.paths); x.fillStyle = '#c8c2b0'; x.fill('nonzero'); }
+      if (cl.paths.length && (font.mode === 'stroke')) { x.beginPath(); trace(cl.paths); x.strokeStyle = '#c8c2b0'; x.stroke(); }
+      if (op.paths.length) { x.beginPath(); trace(op.paths); x.strokeStyle = '#c8c2b0'; x.stroke(); }
       x.restore();
       // nodes + handles (drawn where they ARE under live distortion)
       glView.paths.forEach((p, pi) => {
