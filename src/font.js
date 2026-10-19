@@ -464,10 +464,47 @@ export function distortGlyph(gl, ops, font, rng = Math.random) {
       q.y -= depth * ops.melt * font.cap * (0.4 + rng() * 0.8);
     });
   }
+  // wave: sinusoidal displacement along baseline — liquid/dark-bio
+  if (ops.wave) each((q) => {
+    q.y += Math.sin((q.x / Math.max(1, adv)) * Math.PI * 3) * ops.wave * font.cap * 0.3;
+  });
+  // spire: taper toward top → sigil spires, cyber horns
+  if (ops.spire) each((q) => {
+    const t = Math.max(0, Math.min(1, q.y / Math.max(1, font.cap)));
+    q.x = cx + (q.x - cx) * (1 - ops.spire * t);
+  });
+  // corrode: random nodes bite inward — eaten/crusty edges
+  if (ops.corrode) each((q) => {
+    if (rng() < ops.corrode) {
+      const k = 1 - ops.corrode * (0.25 + rng() * 0.5);
+      q.x = cx + (q.x - cx) * k; q.y = cy + (q.y - cy) * k;
+    }
+  });
+  // vertical slices: bands shifted in y — glitch columns
+  if (ops.vslices >= 1 && ops.vsliceOff) {
+    const left = b ? b[0] : 0, band = adv / Math.max(1, Math.round(ops.vslices));
+    each((q) => {
+      const band_i = Math.floor((q.x - left) / band);
+      if (band_i % 2) q.y += ops.vsliceOff;
+    });
+  }
+  // bulge: belly/pinch around mid height — organic bloat
+  if (ops.bulge) each((q) => {
+    const t = (q.y / Math.max(1, font.cap)) - 0.5;
+    q.x = cx + (q.x - cx) * (1 + Math.cos(t * Math.PI) * ops.bulge);
+  });
   if (ops.snap) each((q) => {
     q.x = Math.round(q.x / ops.snap) * ops.snap;
     q.y = Math.round(q.y / ops.snap) * ops.snap;
   });
+  // pixel: hard quantize + kill curves → blocky pixel letterforms
+  if (ops.pixel) {
+    each((q) => {
+      q.x = Math.round(q.x / ops.pixel) * ops.pixel;
+      q.y = Math.round(q.y / ops.pixel) * ops.pixel;
+    });
+    for (const p of paths) for (const q of p.pts) q.c = null;
+  }
   return { ...gl, paths };
 }
 
@@ -477,4 +514,7 @@ export const DESTROY_PRESETS = {
   glitch:  { noise: 8, spike: 0, slices: 6, sliceOff: 60, snap: 0, chop: 0, melt: 0, push: 0, rotate: 0, skew: 0.1 },
   melt:    { noise: 4, spike: 0, slices: 0, sliceOff: 0, snap: 0, chop: 0, melt: 0.7, push: -0.05, rotate: 0, skew: 0 },
   spike:   { noise: 6, spike: 1, slices: 0, sliceOff: 0, snap: 0, chop: 0, melt: 0, push: -0.15, rotate: 0, skew: 0 },
+  pixel:   { noise: 0, spike: 0, slices: 0, sliceOff: 0, snap: 0, chop: 0, melt: 0, push: 0, rotate: 0, skew: 0, pixel: 45 },
+  bio:     { noise: 10, spike: 0, slices: 0, sliceOff: 0, snap: 0, chop: 0, melt: 0.1, push: 0.15, rotate: 0, skew: 0, wave: 0.5, bulge: 0.4, spire: 0, corrode: 0.2, vslices: 0, vsliceOff: 0, pixel: 0 },
+  horns:   { noise: 4, spike: 0.5, slices: 0, sliceOff: 0, snap: 0, chop: 0, melt: 0, push: 0, rotate: 0, skew: 0.15, wave: 0, bulge: 0, spire: 0.6, corrode: 0, vslices: 0, vsliceOff: 0, pixel: 0 },
 };

@@ -44,9 +44,9 @@ export default function FontPanel({ params, set }) {
   const [tool, setTool] = useState('pen');   // pen | node
   const [sel, setSel] = useState(null);      // {pi, i} path index + point index | 'c'
   const [testStr, setTestStr] = useState('SIGIL');
-  const [ops, setOps] = useState({ noise: 0, melt: 0, spike: 0, push: 0, rotate: 0, skew: 0, slices: 0, sliceOff: 40, snap: 0, chop: 0 });
+  const OPS0 = { noise: 0, melt: 0, spike: 0, push: 0, rotate: 0, skew: 0, slices: 0, sliceOff: 40, vslices: 0, vsliceOff: 40, snap: 0, chop: 0, wave: 0, spire: 0, corrode: 0, bulge: 0, pixel: 0 };
+  const [ops, setOps] = useState({ ...OPS0 });
   const [msg, setMsg] = useState('');
-  const OPS0 = { noise: 0, melt: 0, spike: 0, push: 0, rotate: 0, skew: 0, slices: 0, sliceOff: 40, snap: 0, chop: 0 };
   const cvsRef = useRef(null);
   const dragRef = useRef(null);
   const fileRef = useRef(null);
@@ -302,7 +302,10 @@ export default function FontPanel({ params, set }) {
       noise: Math.round(r() * 60), melt: r() * 0.5, spike: r() * 0.6,
       push: (r() - 0.5) * 0.6, rotate: (r() - 0.5) * 60, skew: (r() - 0.5) * 0.5,
       slices: r() < 0.5 ? 0 : 2 + Math.floor(r() * 8), sliceOff: Math.round(r() * 70),
+      vslices: r() < 0.7 ? 0 : 2 + Math.floor(r() * 8), vsliceOff: Math.round(r() * 70),
       snap: r() < 0.6 ? 0 : 20 + Math.floor(r() * 60), chop: r() < 0.7 ? 0 : Math.floor(r() * 4),
+      wave: (r() - 0.5) * 0.8, spire: r() < 0.6 ? 0 : r() * 0.7,
+      corrode: r() < 0.6 ? 0 : r() * 0.6, bulge: (r() - 0.5) * 0.7, pixel: 0,
     });
   };
   function runeFill() {
@@ -411,6 +414,13 @@ export default function FontPanel({ params, set }) {
           <Mini label="skew" value={ops.skew} min={-1} max={1} step={0.05} onChange={(v) => setOps({ ...ops, skew: v })} />
           <Mini label="slices" value={ops.slices} min={0} max={16} onChange={(v) => setOps({ ...ops, slices: v })} />
           <Mini label="slice off" value={ops.sliceOff} min={0} max={120} onChange={(v) => setOps({ ...ops, sliceOff: v })} />
+          <Mini label="v-slices" value={ops.vslices} min={0} max={16} onChange={(v) => setOps({ ...ops, vslices: v })} />
+          <Mini label="vslice off" value={ops.vsliceOff} min={0} max={120} onChange={(v) => setOps({ ...ops, vsliceOff: v })} />
+          <Mini label="pixel" value={ops.pixel} min={0} max={120} onChange={(v) => setOps({ ...ops, pixel: v })} />
+          <Mini label="wave" value={ops.wave} min={-1} max={1} step={0.05} onChange={(v) => setOps({ ...ops, wave: v })} />
+          <Mini label="spire" value={ops.spire} min={0} max={1} step={0.05} onChange={(v) => setOps({ ...ops, spire: v })} />
+          <Mini label="corrode" value={ops.corrode} min={0} max={1} step={0.05} onChange={(v) => setOps({ ...ops, corrode: v })} />
+          <Mini label="bulge" value={ops.bulge} min={-0.8} max={0.8} step={0.05} onChange={(v) => setOps({ ...ops, bulge: v })} />
           <Mini label="snap grid" value={ops.snap} min={0} max={120} onChange={(v) => setOps({ ...ops, snap: v })} />
           <Mini label="chop" value={ops.chop} min={0} max={6} onChange={(v) => setOps({ ...ops, chop: v })} />
           <div className="frow">
